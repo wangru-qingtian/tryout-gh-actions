@@ -1,0 +1,25 @@
+name: CI-version-check
+on:
+  pull_request:
+    branches:
+      - 'master'
+      - 'release-**'
+    paths:
+      - 'integration/gui/version.h'
+jobs:
+  version-check-targeting-master:
+    if: ${{ github.base_ref == 'master' }}
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+      - name: Check the version string
+        run: echo 'Check version when merging to master branch'
+  version-check-targeting-release:
+    if: ${{ startsWith(github.base_ref, 'release-') }}
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+      - name: Check the version string
+        run: echo 'Check version when merging to release branch'

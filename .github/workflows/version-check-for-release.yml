@@ -1,0 +1,16 @@
+name: CI-version-check-for-release
+on:
+  pull_request:
+    types: [opened, synchronize, edited, reopened]
+    branches: ['release-**']
+jobs:
+  version-check-for-release:
+    if: startsWith(github.base_ref, 'release-')
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+      - name: Match version string
+        run: |
+          echo Match regex "v[0-9]+\.[0-9]+\.[0-9]+" before merging to ${{ github.base_ref }}
+          grep -E '^constexpr char kSoftwareVersion\[\] = "v[0-9]+\.[0-9]+\.[0-9]+";$' version.txt || exit 1

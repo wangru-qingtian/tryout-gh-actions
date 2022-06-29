@@ -5,7 +5,7 @@ on:
 jobs:
   pre-merge-ci:
     if: github.event.issue.pull_request && github.event.comment.body == "action run-ci"
-    runs-on: [self-hosted, clang]
+    runs-on: ubuntu-20.04
     steps:
       - name: Check out code
         uses: actions/checkout@v2

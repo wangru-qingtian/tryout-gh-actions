@@ -1,0 +1,15 @@
+name: CI-sim-ci
+on:
+  issue_comment:
+    types: [created]
+jobs:
+  pre-merge-ci:
+    if: github.event.issue.pull_request && github.event.comment.body == "action run-ci"
+    runs-on: [self-hosted, clang]
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Run CI
+        run: echo ${{ github.event.comment.body }}

@@ -6,33 +6,36 @@ jobs:
   pre-merge-ci:
     if: github.event.issue.pull_request && github.event.comment.body == 'action run-ci'
     runs-on: ubuntu-20.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       # Need this first step to init the git repo.
       - name: Check out code
         uses: actions/checkout@v2
       - name: Checkout pull request
+        id: pull_request
         run: |
           git fetch origin +refs/pull/${{ github.event.issue.number }}/merge
           git checkout FETCH_HEAD
+          echo ::set-output name=head_ref::$(gh pr view ${{ github.event.issue.number }} --json headRefName --template 'refs/heads/{{.headRefName}}')
       - name: Run CI
-        run: echo ${{ github.event.comment.body }}
-      - name: Update status check
-        if: ${{ success() }}
         run: |
-          gh api \
-            --method POST \
-            -H "Accept: application/vnd.github.v3+json" \
-            /repos/${{ github.repository }}/statuses/$(git rev-parse HEAD) \
-            -f state='success'
-           -f target_url='https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
-           -f description='Successful'
+          git fetch origin ${{ steps.pull_request.outputs.head_ref }}
+          echo Triggered by comment: ${{ github.event.comment.body }}
+          echo head_ref: $(git rev-parse ${{ steps.pull_request.outputs.head_ref }})
       - name: Update status check
-        if: ${{ failure() }}
+        if: success()
         run: |
-          gh api \
-            --method POST \
-            -H "Accept: application/vnd.github.v3+json" \
-            /repos/${{ github.repository }}/statuses/$(git rev-parse HEAD) \
-            -f state='failure'
-           -f target_url='https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
-           -f description='Failed'
+          gh api --method POST -H 'Accept: application/vnd.github.v3+json'                                       \
+            /repos/${{ github.repository }}/statuses/$(git rev-parse ${{ steps.pull_request.outputs.head_ref }}) \
+            -f state='success'                                                                                   \
+            -f target_url='https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'        \
+            -f description='Successful'
+      - name: Update status check
+        if: failure()
+        run: |
+          gh api --method POST -H 'Accept: application/vnd.github.v3+json'                                       \
+            /repos/${{ github.repository }}/statuses/$(git rev-parse ${{ steps.pull_request.outputs.head_ref }}) \
+            -f state='failure'                                                                                   \
+            -f target_url='https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'        \
+            -f description='Failed'

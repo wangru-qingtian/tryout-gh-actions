@@ -24,20 +24,23 @@ jobs:
         run: |
           echo Triggered by comment ${{ github.event.comment.body }}
       - name: Update status check
-        if: ${{ success() }}
+        env:
+          SUCCESS: ${{ success() }}
         run: |
           git fetch origin ${{ steps.pull_request.outputs.head_ref }}
-          gh api --method POST -H 'Accept: application/vnd.github.v3+json'                                \
-            /repos/${{ github.repository }}/statuses/$(git rev-parse FETCH_HEAD)                          \
-            -f state='success'                                                                            \
-            -f target_url='https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}' \
-            -f description='Successful'
-      - name: Update status check
-        if: ${{ failure() }}
-        run: |
-          git fetch origin ${{ steps.pull_request.outputs.head_ref }}
-          gh api --method POST -H 'Accept: application/vnd.github.v3+json'                                \
-            /repos/${{ github.repository }}/statuses/$(git rev-parse FETCH_HEAD)                          \
-            -f state='failure'                                                                            \
-            -f target_url='https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}' \
-            -f description='Failed'
+          if [ $SUCCESS = true ]
+          then
+            gh api --method POST -H 'Accept: application/vnd.github.v3+json'                                \
+              /repos/${{ github.repository }}/statuses/$(git rev-parse FETCH_HEAD)                          \
+              -f state='success'                                                                            \
+              -f target_url='https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}' \
+              -f context 'CI-sim-ci/pre-merge-ci'                                                           \
+              -f description='Successful'
+          else
+            gh api --method POST -H 'Accept: application/vnd.github.v3+json'                                \
+              /repos/${{ github.repository }}/statuses/$(git rev-parse FETCH_HEAD)                          \
+              -f state='failure'                                                                            \
+              -f target_url='https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}' \
+              -f context 'CI-sim-ci/pre-merge-ci'                                                           \
+              -f description='Failed'
+          fi

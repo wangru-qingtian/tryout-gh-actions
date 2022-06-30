@@ -4,43 +4,62 @@ on:
   issue_comment:
     types: [created]
 
+# Cancel in-progress jobs for this PR.
+concurrency:
+  group: ${{ github.repository }}/${{ github.workflow }}/${{ github.event.issue.number }}
+  cancel-in-progress: true
+
 jobs:
   pre-merge-ci:
     if: ${{ github.event.issue.pull_request && github.event.comment.body == 'action run-ci' }}
     runs-on: ubuntu-20.04
+    permissions: write-all
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TARGET_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
     steps:
-      # Need this first step to init the git repo.
+      # Need this to help clone the repo.
       - name: Check out code
         uses: actions/checkout@v2
+
+      # Checkout the trigger pull request.
+      # Also output the head(source) branch ref name.
       - name: Checkout pull request
         id: pull_request
         run: |
-          echo ::set-output name=head_ref::$(gh pr view ${{ github.event.issue.number }} --json headRefName --template 'refs/heads/{{.headRefName}}')
+          # The `issue_comment' does not provide the PR information. We have to output it.
+          head_ref=$(gh pr view ${{ github.event.issue.number }} --json headRefName --template 'refs/heads/{{.headRefName}}')
+          echo ::set-output name=head_ref::$head_ref
+          # Fetch the merge commit.
           git fetch origin +refs/pull/${{ github.event.issue.number }}/merge
           git checkout FETCH_HEAD
+
+      - name: Update status check on start
+        run: |
+          gh api --method POST -H 'Accept: application/vnd.github.v3+json'       \
+            /repos/${{ github.repository }}/statuses/$(git rev-parse FETCH_HEAD) \
+            -f state='pending' -f target_url=$TARGET_URL -f context='pre-merge-ci' -f description='In progress'
+
       - name: Run CI
         run: |
-          echo Triggered by comment ${{ github.event.comment.body }}
-      - name: Update status check
-        env:
-          SUCCESS: ${{ success() }}
+          echo "[head_ref] ${{ steps.pull_request.outputs.head_ref }}"
+          echo "[merge_commit_sha] $(git rev-parse FETCH_HEAD)"
+          echo "[target_url] $TARGET_URL"
+          echo "[group] ${{ github.repository }}/${{ github.workflow }}/${{ github.event.issue.number }}"
+
+      - name: Update status check on success
+        if: ${{ success() }}
         run: |
           git fetch origin ${{ steps.pull_request.outputs.head_ref }}
-          if [ $SUCCESS = true ]
-          then
-            gh api --method POST -H 'Accept: application/vnd.github.v3+json'                                \
-              /repos/${{ github.repository }}/statuses/$(git rev-parse FETCH_HEAD)                          \
-              -f state='success'                                                                            \
-              -f target_url='https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}' \
-              -f context 'CI-sim-ci/pre-merge-ci'                                                           \
-              -f description='Successful'
-          else
-            gh api --method POST -H 'Accept: application/vnd.github.v3+json'                                \
-              /repos/${{ github.repository }}/statuses/$(git rev-parse FETCH_HEAD)                          \
-              -f state='failure'                                                                            \
-              -f target_url='https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}' \
-              -f context 'CI-sim-ci/pre-merge-ci'                                                           \
-              -f description='Failed'
-          fi
+          gh api --method POST -H 'Accept: application/vnd.github.v3+json'       \
+            /repos/${{ github.repository }}/statuses/$(git rev-parse FETCH_HEAD) \
+            -f state='success' -f target_url=$TARGET_URL -f context='pre-merge-ci' -f description='Successful'
+
+      - name: Update status check on failure
+        if: ${{ failure() }}
+        run: |
+          git fetch origin ${{ steps.pull_request.outputs.head_ref }}
+          gh api --method POST -H 'Accept: application/vnd.github.v3+json'       \
+            /repos/${{ github.repository }}/statuses/$(git rev-parse FETCH_HEAD) \
+            -f state='failure' -f target_url=$TARGET_URL -f context='pre-merge-ci' -f description='Failed'
